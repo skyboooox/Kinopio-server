@@ -1,0 +1,119 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch or ref to sync from nats-io/nats-server"
+        required: true
+        default: "main"
+      base_branch:
+        description: "Fork branch that should receive the update PR"
+        required: true
+        default: "main"
+      run_tests:
+        description: "Run focused fork patch tests before opening the PR"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync upstream into fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard fork-only workflow
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REPOSITORY}" = "nats-io/nats-server" ]; then
+            echo "::error ::This workflow is for the fork only and must not run against nats-io/nats-server."
+            exit 1
+          fi
+
+      - name: Checkout fork branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.base_branch }}
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/nats-io/nats-server.git
+          git fetch --no-tags upstream "${{ inputs.upstream_ref }}"
+
+      - name: Rebase fork branch onto upstream
+        id: rebase
+        run: |
+          set -euo pipefail
+          safe_ref="$(printf '%s' "${{ inputs.upstream_ref }}" | tr -c 'A-Za-z0-9._-' '-')"
+          branch="sync/upstream-${safe_ref}-${GITHUB_RUN_ID}"
+          git checkout -B "$branch"
+          git rebase FETCH_HEAD
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Run focused tests
+        if: ${{ inputs.run_tests }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$PWD":/src/nats-server:ro \
+            -w /work \
+            alpine:latest \
+            sh -lc '
+              apk add --no-cache go git bash >/dev/null &&
+              cp -a /src/nats-server /work/nats-server &&
+              cd /work/nats-server &&
+              export GOTOOLCHAIN=local GOCACHE=/tmp/gocache GOMODCACHE=/tmp/gomodcache GOTMPDIR=/tmp &&
+              go test ./server -run "^(Test.*FirstWildcard|TestQueueSubscribePermissions|TestClientSubscribeDenyWildcardOverlapBlocksDelivery|TestConfigRejectFirstWildcard)$" -count=1 &&
+              go test ./test -run "^(TestUserAuthorizationProto|Test.*FirstWildcard)$" -count=1
+            '
+
+      - name: Detect changes
+        id: changes
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ inputs.base_branch }}"
+          if git diff --quiet "origin/${{ inputs.base_branch }}"...HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push sync branch
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          set -euo pipefail
+          git push --force-with-lease origin "${{ steps.rebase.outputs.branch }}"
+
+      - name: Open pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "${{ inputs.base_branch }}" \
+            --head "${{ steps.rebase.outputs.branch }}" \
+            --title "sync: upstream ${{ inputs.upstream_ref }}" \
+            --body "Manual upstream sync from \`nats-io/nats-server@${{ inputs.upstream_ref }}\`.
+
+This PR is created in this fork only. It rebases the fork branch onto upstream and keeps the fork-specific \`reject_first_wildcard\` change in this repository."
+
+      - name: No changes
+        if: steps.changes.outputs.has_changes != 'true'
+        run: |
+          echo "Fork branch is already up to date with upstream ref ${{ inputs.upstream_ref }}."

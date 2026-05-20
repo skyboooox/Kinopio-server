@@ -2563,6 +2563,48 @@ func TestConfigCheck(t *testing.T) {
 	}
 }
 
+func TestConfigRejectFirstWildcard(t *testing.T) {
+	config := `
+		authorization {
+			reject_first_wildcard: true
+		}
+	`
+	opts, err := ProcessConfigFile(createConfFile(t, []byte(config)))
+	if err != nil {
+		t.Fatalf("Unexpected error processing config with reject_first_wildcard enabled: %v", err)
+	}
+	if !opts.RejectFirstWildcard {
+		t.Fatalf("Expected RejectFirstWildcard true")
+	}
+
+	config = `
+		authorization {
+		}
+	`
+	opts, err = ProcessConfigFile(createConfFile(t, []byte(config)))
+	if err != nil {
+		t.Fatalf("Unexpected error processing config without reject_first_wildcard: %v", err)
+	}
+	if opts.RejectFirstWildcard {
+		t.Fatalf("Expected RejectFirstWildcard false by default")
+	}
+
+	oldNames := []string{
+		"reject_wildcard_scope",
+		"reject_wildcard_scope_subscriptions",
+	}
+	for _, name := range oldNames {
+		config = fmt.Sprintf(`
+			authorization {
+				%s: true
+			}
+		`, name)
+		if _, err := ProcessConfigFile(createConfFile(t, []byte(config))); err == nil {
+			t.Fatalf("Expected unknown config field error for %q", name)
+		}
+	}
+}
+
 func TestConfigCheckIncludes(t *testing.T) {
 	// Check happy path first.
 	opts := &Options{

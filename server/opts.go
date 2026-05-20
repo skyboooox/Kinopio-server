@@ -427,6 +427,7 @@ type Options struct {
 	Username                   string        `json:"-"`
 	Password                   string        `json:"-"`
 	ProxyRequired              bool          `json:"-"`
+	RejectFirstWildcard        bool          `json:"-"`
 	ProxyProtocol              bool          `json:"-"`
 	Authorization              string        `json:"-"`
 	AuthCallout                *AuthCallout  `json:"-"`
@@ -851,6 +852,8 @@ type authorization struct {
 	acc   string
 	// If connection must come through proxy
 	proxyRequired bool
+	// Reject subscriptions whose first token is a wildcard
+	rejectFirstWildcard bool
 	// Multiple Nkeys/Users
 	nkeys              []*NkeyUser
 	users              []*User
@@ -1197,6 +1200,7 @@ func (o *Options) processConfigFileLine(k string, v any, errors *[]error, warnin
 		o.Username = auth.user
 		o.Password = auth.pass
 		o.ProxyRequired = auth.proxyRequired
+		o.RejectFirstWildcard = auth.rejectFirstWildcard
 		o.Authorization = auth.token
 		o.AuthTimeout = auth.timeout
 		o.AuthCallout = auth.callout
@@ -4565,6 +4569,8 @@ func parseAuthorization(v any, errors, warnings *[]error) (*authorization, error
 			auth.callout = ac
 		case "proxy_required":
 			auth.proxyRequired = mv.(bool)
+		case "reject_first_wildcard":
+			auth.rejectFirstWildcard = mv.(bool)
 		default:
 			if !tk.IsUsedVariable() {
 				err := &unknownConfigFieldErr{

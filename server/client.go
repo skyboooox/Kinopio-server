@@ -2954,6 +2954,16 @@ func (c *client) processSub(subject, queue, bsid []byte, cb msgHandler, noForwar
 	return c.processSubEx(subject, queue, bsid, cb, noForward, false, false)
 }
 
+func rejectFirstWildcardSub(subject []byte) bool {
+	if bytes.Equal(subject, []byte(string(fwc))) {
+		return true
+	}
+	if i := bytes.IndexByte(subject, btsep); i >= 0 {
+		subject = subject[:i]
+	}
+	return bytes.Equal(subject, []byte(string(pwc))) || bytes.Equal(subject, []byte(string(fwc)))
+}
+
 func (c *client) processSubEx(subject, queue, bsid []byte, cb msgHandler, noForward, si, rsi bool) (*subscription, error) {
 	// Create the subscription
 	sub := &subscription{client: c, subject: subject, queue: queue, sid: bsid, icb: cb, si: si, rsi: rsi}
@@ -2993,6 +3003,12 @@ func (c *client) processSubEx(subject, queue, bsid []byte, cb msgHandler, noForw
 				return nil, ErrSubscribePermissionViolation
 			}
 		} else if !c.canSubscribe(string(sub.subject)) {
+			c.mu.Unlock()
+			c.subPermissionViolation(sub)
+			return nil, ErrSubscribePermissionViolation
+		}
+
+		if opts := srv.getOpts(); opts != nil && opts.RejectFirstWildcard && rejectFirstWildcardSub(sub.subject) {
 			c.mu.Unlock()
 			c.subPermissionViolation(sub)
 			return nil, ErrSubscribePermissionViolation

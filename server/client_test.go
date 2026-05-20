@@ -1048,6 +1048,110 @@ func TestQueueSubscribePermissions(t *testing.T) {
 	}
 }
 
+func TestClientSubscribeFirstWildcardDisabledKeepsBehavior(t *testing.T) {
+	opts := defaultServerOptions
+	opts.RejectFirstWildcard = false
+	s, c, r, _ := rawSetup(opts)
+	defer s.Shutdown()
+	defer c.close()
+
+	proto := []byte("CONNECT {\"verbose\":true}\r\nSUB *.> 1\r\nPING\r\n")
+	go c.parseAndClose(proto)
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "+OK\r\n+OK\r\nPONG\r\n" {
+		t.Fatalf("Expected %q, but got %q", "+OK\r\n+OK\r\nPONG\r\n", got)
+	}
+}
+
+func TestClientSubscribeFirstWildcardRejectMatrix(t *testing.T) {
+	cases := []string{
+		">",
+		"*.>",
+		"*.*",
+		"*.*.>",
+		"*.foo",
+		"*.foo.>",
+	}
+
+	for _, subject := range cases {
+		t.Run(subject, func(t *testing.T) {
+			subject := subject
+			opts := defaultServerOptions
+			opts.RejectFirstWildcard = true
+			s, c, r, _ := rawSetup(opts)
+			defer s.Shutdown()
+			defer c.close()
+
+			proto := []byte(fmt.Sprintf("CONNECT {\"verbose\":true}\r\nSUB %s 1\r\nPING\r\n", subject))
+			go c.parseAndClose(proto)
+
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, r); err != nil {
+				t.Fatal(err)
+			}
+			want := "+OK\r\n-ERR 'Permissions Violation for Subscription to \"" + subject + "\"'\r\nPONG\r\n"
+			if got := buf.String(); got != want {
+				t.Fatalf("Expected %q, but got %q", want, got)
+			}
+		})
+	}
+}
+
+func TestClientSubscribeFirstWildcardAllowMatrix(t *testing.T) {
+	cases := []string{
+		"abc.>",
+		"abc.foo",
+		"abc.foo.bar",
+		"550e8400-e29b-41d4-a716-446655440000.>",
+	}
+
+	for _, subject := range cases {
+		t.Run(subject, func(t *testing.T) {
+			subject := subject
+			opts := defaultServerOptions
+			opts.RejectFirstWildcard = true
+			s, c, r, _ := rawSetup(opts)
+			defer s.Shutdown()
+			defer c.close()
+
+			proto := []byte(fmt.Sprintf("CONNECT {\"verbose\":true}\r\nSUB %s 1\r\nPING\r\n", subject))
+			go c.parseAndClose(proto)
+
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, r); err != nil {
+				t.Fatal(err)
+			}
+			want := "+OK\r\n+OK\r\nPONG\r\n"
+			if got := buf.String(); got != want {
+				t.Fatalf("Expected %q, but got %q", want, got)
+			}
+		})
+	}
+}
+
+func TestClientPublishStillWorksWithRejectFirstWildcard(t *testing.T) {
+	opts := defaultServerOptions
+	opts.RejectFirstWildcard = true
+	s, c, r, _ := rawSetup(opts)
+	defer s.Shutdown()
+	defer c.close()
+
+	proto := []byte("CONNECT {\"verbose\":true}\r\nPUB random.any 2\r\nok\r\nPING\r\n")
+	go c.parseAndClose(proto)
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "+OK\r\n+OK\r\nPONG\r\n" {
+		t.Fatalf("Expected %q, but got %q", "+OK\r\n+OK\r\nPONG\r\n", got)
+	}
+}
+
 func TestClientSubscribeDenyWildcardOverlapBlocksDelivery(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
