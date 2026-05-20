@@ -179,6 +179,14 @@ func require_LessThan[T cmp.Ordered](t *testing.T, a, b T) {
 	}
 }
 
+func require_LessThanOrEqual[T cmp.Ordered](t *testing.T, a, b T) {
+	t.Helper()
+	if a > b {
+		antithesis.AssertUnreachable(t, "Failed require_LessThanOrEqual check", nil)
+		t.Fatalf("require %v to be less than or equal to %v", a, b)
+	}
+}
+
 func require_ChanRead[T any](t *testing.T, ch chan T, timeout time.Duration) T {
 	t.Helper()
 	select {

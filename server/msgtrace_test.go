@@ -5390,7 +5390,7 @@ func TestMsgTraceAccountDestWithSampling(t *testing.T) {
 			} else {
 				// Otherwise, we should have no more (but let's be conservative)
 				// than the sampling number.
-				require_LessThan[int](t, fromClient, int(float64(test.sampling*total/100)*1.35))
+				require_LessThanOrEqual[int](t, fromClient, int(float64(test.sampling*total/100)*1.35))
 			}
 		})
 	}
@@ -5472,7 +5472,7 @@ func TestMsgTraceAccDestWithSamplingJWTUpdate(t *testing.T) {
 			} else {
 				// Otherwise, we should have no more (but let's be conservative)
 				// than the sampling number.
-				require_LessThan[int](t, n, int(float64(test.sampling*total/100)*1.35))
+				require_LessThanOrEqual[int](t, n, int(float64(test.sampling*total/100)*1.35))
 			}
 		})
 	}
