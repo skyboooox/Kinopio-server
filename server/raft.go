@@ -1553,12 +1553,20 @@ func (c *checkpoint) InstallSnapshot(data []byte) (uint64, error) {
 	n.Unlock()
 	err := writeFileWithSync(c.snapFile, encoded, defaultFilePerms)
 	n.Lock()
+	// On either failure path, drop the file we just wrote so it doesn't get
+	// picked up by setupLastSnapshot on restart. Skip the remove if it's the
+	// snapshot already adopted into n.snapfile for this term/applied.
 	if err != nil {
+		if c.snapFile != n.snapfile {
+			os.Remove(c.snapFile)
+		}
 		// We could set write err here, but if this is a temporary situation, too many open files etc.
 		// we want to retry and snapshots are not fatal.
 		return 0, err
 	} else if !n.snapshotting {
-		// The checkpoint can be aborted at any time, don't continue if that happened.
+		if c.snapFile != n.snapfile {
+			os.Remove(c.snapFile)
+		}
 		return 0, errSnapAborted
 	}
 
@@ -2270,6 +2278,9 @@ func (n *raft) Reset() {
 		n.warn("Error recreating snapshots directory during reset: %v", err)
 	}
 	n.snapfile = _EMPTY_
+
+	// Abort any inflight async snapshot checkpoint.
+	n.snapshotting = false
 
 	// Reset the WAL, but reset these first to not trip the assertion.
 	n.commit, n.hcommit, n.applied, n.processed, n.papplied = 0, 0, 0, 0, 0

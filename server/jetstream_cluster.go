@@ -10265,9 +10265,7 @@ func (mset *stream) processSnapshot(snap *StreamReplicatedState, index uint64) (
 		mset.mu.Lock()
 		for _, o := range mset.consumers {
 			o.mu.Lock()
-			if o.isLeader() {
-				o.streamNumPending()
-			}
+			o.streamNumPending()
 			o.mu.Unlock()
 		}
 		mset.mu.Unlock()
@@ -11160,6 +11158,8 @@ func (mset *stream) runCatchup(sendSubject string, sreq *streamSyncRequest) {
 
 	// Run as long as we are still active and need catchup.
 	// FIXME(dlc) - Purge event? Stream delete?
+	retryTimer := time.NewTimer(500 * time.Millisecond)
+	defer stopAndClearTimer(&retryTimer)
 	for {
 		// Get this each time, will be non-nil if globally blocked and we will close to wake everyone up.
 		cbKick := s.cbKickChan()
@@ -11186,12 +11186,13 @@ func (mset *stream) runCatchup(sendSubject string, sreq *streamSyncRequest) {
 				mset.clearCatchupPeer(sreq.Peer)
 				return
 			}
-		case <-time.After(500 * time.Millisecond):
+		case <-retryTimer.C:
 			if !sendNextBatchAndContinue(qch) {
 				mset.clearCatchupPeer(sreq.Peer)
 				return
 			}
 		}
+		retryTimer.Reset(500 * time.Millisecond)
 	}
 }
 
