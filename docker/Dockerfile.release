@@ -1,0 +1,11 @@
+FROM scratch
+
+ARG TARGETPLATFORM
+
+COPY docker/nats-server.conf /nats/conf/nats-server.conf
+COPY ${TARGETPLATFORM}/nats-server /bin/nats-server
+
+EXPOSE 4222 8222 6222 5222
+
+ENTRYPOINT ["/bin/nats-server"]
+CMD ["-c", "/nats/conf/nats-server.conf"]

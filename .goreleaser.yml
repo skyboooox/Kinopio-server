@@ -12,7 +12,8 @@ changelog:
   disable: true
 
 builds:
-  - main: .
+  - id: nats-server
+    main: .
     binary: nats-server
     flags:
       - -trimpath
@@ -116,3 +117,26 @@ sboms:
       [
         "{{.ProjectName}}-{{.Tag}}-{{.Os}}-{{.Arch}}{{if .Arm}}{{.Arm}}{{end}}.sbom.spdx.json",
       ]
+
+dockers_v2:
+  - id: kinopio-server
+    dockerfile: docker/Dockerfile.release
+    ids:
+      - nats-server
+    images:
+      - "{{ envOrDefault \"DOCKERHUB_IMAGE\" \"skyboooox/kinopio-server\" }}"
+    tags:
+      - "{{ .Tag }}"
+    extra_files:
+      - docker/nats-server.conf
+    platforms:
+      - linux/amd64
+      - linux/arm64
+      - linux/arm/v6
+      - linux/arm/v7
+      - linux/386
+      - linux/ppc64le
+      - linux/riscv64
+      - linux/s390x
+      - linux/loong64
+      - linux/mips64le
