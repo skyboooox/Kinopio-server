@@ -29,7 +29,7 @@ runs:
       shell: sh
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
-        echo "GIT_COMMIT=$(cd ${{ inputs.workdir }}/nats-server && git rev-parse --short HEAD)" >> $GITHUB_ENV
+        echo "GIT_COMMIT=$(cd ${{ github.workspace }}/src/github.com/nats-io/nats-server && git rev-parse --short HEAD)" >> $GITHUB_ENV
         echo "BUILD_NAME=$(echo ${{ inputs.name }} | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g')" >> $GITHUB_ENV
 
     - name: Build and push Docker images
@@ -43,5 +43,5 @@ runs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: |
-          synadia/nats-server:${{ env.BUILD_NAME }}
-          synadia/nats-server:${{ env.BUILD_NAME }}-${{ env.BUILD_DATE }}
+          skyboooox/kinopio-server:${{ env.BUILD_NAME }}
+          skyboooox/kinopio-server:${{ env.BUILD_NAME }}-${{ env.BUILD_DATE }}
