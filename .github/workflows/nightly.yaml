@@ -7,9 +7,6 @@ on:
         type: string
         required: false
 
-  schedule:
-    - cron: "40 4 * * *"
-
 permissions:
   contents: read
 
